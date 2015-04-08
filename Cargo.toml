@@ -1,0 +1,6 @@
+[package]
+name = "plaintalk"
+description = "A library for parsing and generating PlainTalk"
+version = "0.0.1"
+authors = ["Magnus Hoff <maghoff@gmail.com>"]
+license = "MIT"
