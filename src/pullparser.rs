@@ -3,7 +3,7 @@ extern crate num;
 pub mod pull {
 	use std;
 	use std::io::{Read, Result, Error, ErrorKind};
-	use pull::num::traits::{CheckedAdd, CheckedMul};
+	use pullparser::num::traits::{CheckedAdd, CheckedMul};
 
 	const CURLY_L: u8 = '{' as u8;
 	const CURLY_R: u8 = '}' as u8;
@@ -179,8 +179,7 @@ pub mod pull {
 #[cfg(test)]
 mod test {
 	use std::io::{Read, Cursor};
-
-	use pull::*;
+	use pullparser::*;
 
 	fn buffer_message(message: &mut pull::Message) -> Vec<String> {
 		let mut parsed_message = Vec::<String>::new();
