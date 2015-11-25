@@ -1,4 +1,4 @@
-mod pull;
+pub mod pull;
 
 pub mod plaintalk {
 	pub trait PlainTalkParserListener {
@@ -76,7 +76,7 @@ pub mod plaintalk {
 			}
 		}
 
-		fn expect_line_feed<'b>(&mut self, s: &'b [u8]) -> &'b [u8] {
+		fn expect_line_feed<'b>(&mut self, _s: &'b [u8]) -> &'b [u8] {
 			panic!();
 		}
 	}

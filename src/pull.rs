@@ -90,7 +90,7 @@ pub mod pull {
 					return Ok(escaped_bytes);
 				},
 				Some(Ok(x)) if NUM_0 <= x && x <= NUM_9 => {
-					match escaped_bytes.checked_mul(10).map(|y| y + (x - NUM_0) as usize) {
+					match escaped_bytes.checked_mul(10).and_then(|y| y.checked_add((x - NUM_0) as usize)) {
 						Some(y) => escaped_bytes = y,
 						None => return Err((ErrorKind::InvalidData, "Overflow in PlainTalk escape sequence")),
 					}
@@ -178,7 +178,7 @@ pub mod pull {
 
 #[cfg(test)]
 mod test {
-	use std::io::{self, Read, Cursor};
+	use std::io::{Read, Cursor};
 
 	use pull::*;
 
@@ -220,7 +220,7 @@ mod test {
 		let mut parser = pull::PullParser::new(&mut data);
 
 		let mut parsed_messages = Vec::<Vec<String>>::new();
-		for x in 0..3 {
+		for _ in 0..3 {
 			parsed_messages.push(buffer_message(&mut parser.get_message()));
 		}
 
@@ -257,7 +257,7 @@ mod test {
 		let mut parser = pull::PullParser::new(&mut data);
 
 		let mut parsed_messages = Vec::<Vec<String>>::new();
-		for x in 0..2 {
+		for _ in 0..2 {
 			parsed_messages.push(buffer_message(&mut parser.get_message()));
 		}
 
