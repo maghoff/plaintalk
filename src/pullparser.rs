@@ -12,19 +12,31 @@ const LF: u8 = '\n' as u8;
 const NUM_0: u8 = '0' as u8;
 const NUM_9: u8 = '9' as u8;
 
+enum PullParserState {
+	Initial,
+	Done,
+	Error(&'static str),
+}
+
 pub struct PullParser<'a> {
 	source: &'a mut Read,
+	state: PullParserState,
 }
 
 impl<'a> PullParser<'a> {
 	pub fn new<'b>(source: &'b mut Read) -> PullParser<'b> {
 		PullParser {
 			source: source,
+			state: PullParserState::Initial,
 		}
 	}
 
-	pub fn get_message<'x, 'y: 'x+'y>(&'y mut self) -> Message<'x, 'a> {
-		Message::new(self)
+	pub fn get_message<'x, 'y: 'x+'y>(&'y mut self) -> std::result::Result<Option<Message<'x, 'a>>, &'static str> {
+		match self.state {
+			PullParserState::Initial => Ok(Some(Message::new(self))),
+			PullParserState::Done => Ok(None),
+			PullParserState::Error(err) => Err(err),
+		}
 	}
 }
 
@@ -32,6 +44,7 @@ enum MessageParserState {
 	ExpectingField,
 	ReadingField,
 	Done,
+	Error(&'static str),
 }
 
 pub struct Message<'a, 'b: 'a + 'b> {
@@ -54,7 +67,8 @@ impl<'a, 'b> Message<'a, 'b> {
 				Ok(Some(Field::new(self)))
 			},
 			MessageParserState::ReadingField => Err("You need to finish reading the field"),
-			MessageParserState::Done => Ok(None)
+			MessageParserState::Done => Ok(None),
+			MessageParserState::Error(err) => Err(err),
 		}
 	}
 }
@@ -115,7 +129,8 @@ impl<'a, 'b, 'c> Read for Field<'a, 'b, 'c> {
 								match parse_escape_header(&mut bytes) {
 									Ok(escaped_bytes) => self.state = FieldParserState::ReadingEscapedBytes(escaped_bytes),
 									Err(err) => {
-										// TODO: Set error state in parser and message objects, there is no way to recover.
+										self.source.source.state = PullParserState::Error(err.1);
+										self.source.state = MessageParserState::Error(err.1);
 										self.state = FieldParserState::Error(err.0, err.1);
 									}
 								}
@@ -135,7 +150,8 @@ impl<'a, 'b, 'c> Read for Field<'a, 'b, 'c> {
 										self.state = FieldParserState::Done;
 									},
 									_ => {
-										// TODO: Set error state in parser and message objects, there is no way to recover.
+										self.source.source.state = PullParserState::Error("Invalid byte after CR");
+										self.source.state = MessageParserState::Error("Invalid byte after CR");
 										self.state = FieldParserState::Error(ErrorKind::InvalidData, "Invalid byte after CR");
 									}
 								}
@@ -147,7 +163,11 @@ impl<'a, 'b, 'c> Read for Field<'a, 'b, 'c> {
 							Some(Err(err)) => {
 								return Err(err)
 							},
-							None => break
+							None => {
+								self.source.source.state = PullParserState::Done;
+								self.source.state = MessageParserState::Done;
+								self.state = FieldParserState::Done;
+							}
 						}
 					}
 				},
@@ -189,12 +209,20 @@ mod test {
 		parsed_message
 	}
 
+	fn buffer_all_messages(parser: &mut PullParser) -> Vec<Vec<String>> {
+		let mut parsed_messages = Vec::<Vec<String>>::new();
+		while let Ok(Some(mut message)) = parser.get_message() {
+			parsed_messages.push(buffer_message(&mut message));
+		}
+		parsed_messages
+	}
+
 	#[test]
 	fn it_works() {
 		let mut data = Cursor::new(String::from("0 ape katt lol").into_bytes());
 		let mut parser = PullParser::new(&mut data);
 
-		let mut message = parser.get_message();
+		let mut message = parser.get_message().unwrap().unwrap();
 
 		let mut buffer = String::new();
 
@@ -213,13 +241,8 @@ mod test {
 
 	#[test]
 	fn it_can_parse_several_messages() {
-		let mut data = Cursor::new(String::from("0 ape katt\n1 tam ape\n2 lol\n").into_bytes());
+		let mut data = Cursor::new(String::from("0 ape katt\n1 tam ape\n2 lol").into_bytes());
 		let mut parser = PullParser::new(&mut data);
-
-		let mut parsed_messages = Vec::<Vec<String>>::new();
-		for _ in 0..3 {
-			parsed_messages.push(buffer_message(&mut parser.get_message()));
-		}
 
 		assert_eq!(
 			vec![
@@ -227,7 +250,7 @@ mod test {
 				vec!["1", "tam", "ape"],
 				vec!["2", "lol"],
 			],
-			parsed_messages
+			buffer_all_messages(&mut parser)
 		);
 	}
 
@@ -236,7 +259,7 @@ mod test {
 		let mut data = Cursor::new(String::from("{6}0{1} a{10}pe katt\nlol fie{3}ld 2\n").into_bytes());
 		let mut parser = PullParser::new(&mut data);
 
-		assert_eq!(vec!["0{1} ape katt\nlol", "field 2"], buffer_message(&mut parser.get_message()));
+		assert_eq!(vec!["0{1} ape katt\nlol", "field 2"], buffer_message(&mut parser.get_message().unwrap().unwrap()));
 	}
 
 	#[test]
@@ -244,7 +267,7 @@ mod test {
 		let mut data = Cursor::new(String::from("{9000000000000000000000}blahblah\n").into_bytes());
 		let mut parser = PullParser::new(&mut data);
 		let mut buffer = String::new();
-		let result = parser.get_message().get_field().unwrap().unwrap().read_to_string(&mut buffer);
+		let result = parser.get_message().unwrap().unwrap().get_field().unwrap().unwrap().read_to_string(&mut buffer);
 		assert!(result.is_err());
 	}
 
@@ -253,17 +276,13 @@ mod test {
 		let mut data = Cursor::new(String::from("0 ape\r\n1 katt\r\n").into_bytes());
 		let mut parser = PullParser::new(&mut data);
 
-		let mut parsed_messages = Vec::<Vec<String>>::new();
-		for _ in 0..2 {
-			parsed_messages.push(buffer_message(&mut parser.get_message()));
-		}
-
 		assert_eq!(
 			vec![
 				vec!["0", "ape"],
 				vec!["1", "katt"],
+				vec![""],
 			],
-			parsed_messages
+			buffer_all_messages(&mut parser)
 		);
 	}
 }
