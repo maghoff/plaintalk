@@ -164,6 +164,8 @@ impl<'a, 'b, 'c> Read for Field<'a, 'b, 'c> {
 								return Err(err)
 							},
 							None => {
+								// TODO It should be considered an error to reach EOF unless
+								// we are at the very beginning of a message
 								self.source.source.state = PullParserState::Done;
 								self.source.state = MessageParserState::Done;
 								self.state = FieldParserState::Done;
@@ -172,8 +174,11 @@ impl<'a, 'b, 'c> Read for Field<'a, 'b, 'c> {
 					}
 				},
 				FieldParserState::ReadingEscapedBytes(size_left) => {
+					// TODO It is possible to reach EOF here. It should be considered an
+					// error, and the parser should stop
 					let try_to_read = std::cmp::min(buf.len()-cursor, size_left);
 					let read_bytes = try!{reader.read(&mut buf[cursor..cursor+try_to_read])};
+					// TODO An error ^^here should probably terminate the parser
 					cursor += read_bytes;
 					self.state = match size_left - read_bytes {
 						0 => FieldParserState::Initial,
