@@ -53,7 +53,7 @@ pub struct Message<'a, 'b: 'a + 'b> {
 }
 
 impl<'a, 'b> Message<'a, 'b> {
-	pub fn new(source: &'a mut PullParser<'b>) -> Message<'a, 'b> {
+	fn new(source: &'a mut PullParser<'b>) -> Message<'a, 'b> {
 		Message {
 			source: source,
 			state: MessageParserState::ExpectingField,
@@ -86,7 +86,7 @@ pub struct Field<'a, 'b: 'a + 'b, 'c: 'b + 'c> {
 }
 
 impl<'a, 'b, 'c> Field<'a, 'b, 'c> {
-	pub fn new(source: &'a mut Message<'b, 'c>) -> Field<'a, 'b, 'c> {
+	fn new(source: &'a mut Message<'b, 'c>) -> Field<'a, 'b, 'c> {
 		Field {
 			source: source,
 			state: FieldParserState::Initial,
