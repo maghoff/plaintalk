@@ -14,6 +14,7 @@ enum PushGeneratorState {
 pub struct PushGenerator<'a> {
 	target: &'a mut Write,
 	state: PushGeneratorState,
+	auto_flush: bool,
 }
 
 impl<'a> PushGenerator<'a> {
@@ -21,6 +22,7 @@ impl<'a> PushGenerator<'a> {
 		PushGenerator {
 			target: target,
 			state: PushGeneratorState::Initial,
+			auto_flush: true,
 		}
 	}
 
@@ -39,6 +41,10 @@ impl<'a> PushGenerator<'a> {
 
 	pub fn flush(&mut self) -> io::Result<()> {
 		self.target.flush()
+	}
+
+	fn auto_flush(&self) -> bool {
+		self.auto_flush
 	}
 }
 
@@ -89,6 +95,11 @@ impl<'a, 'b> Drop for Message<'a, 'b> {
 		self.target.state = match self.target.target.write_all(&['\n' as u8]) {
 			Ok(()) => PushGeneratorState::Initial,
 			Err(_err) => PushGeneratorState::Error(Error::Unspecified("Nested error")),
+		};
+		if self.target.auto_flush() {
+			if let Err(_err) = self.target.target.flush() {
+				self.target.state = PushGeneratorState::Error(Error::Unspecified("Autoflush failed"));
+			}
 		}
 	}
 }
