@@ -1,7 +1,10 @@
 [package]
 name = "plaintalk"
 description = "A library for parsing and generating PlainTalk"
-version = "0.0.6"
+repository = "https://github.com/maghoff/plaintalk"
+readme = "README.md"
+documentation = "http://magnushoff.com/plaintalk/introduction-and-definition.html"
+version = "0.0.7"
 authors = ["Magnus Hoff <maghoff@gmail.com>"]
 license = "MIT"
 
