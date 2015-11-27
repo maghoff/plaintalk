@@ -36,6 +36,10 @@ impl<'a> PushGenerator<'a> {
 			PushGeneratorState::Error(ref err) => Err(err.clone())
 		}
 	}
+
+	pub fn flush(&mut self) -> io::Result<()> {
+		self.target.flush()
+	}
 }
 
 enum MessageState {
@@ -66,13 +70,17 @@ impl<'a, 'b> Message<'a, 'b> {
 			MessageState::AfterFirstField => {
 				// TODO Handle failure. Should the generator get into a failed
 				// state? Or are we able to try the same operation again?
-				if let Err(_err) = self.target.target.write_all(&[' ' as u8]) { return Err(Error::Unspecified("Nested error")); }
+				if let Err(_err) = self.target.target.write_all(b" ") { return Err(Error::Unspecified("Nested error")); }
 				self.state = MessageState::GeneratingField;
 				Ok(Field::new(self))
 			},
 			MessageState::GeneratingField =>
 				Err(Error::Unspecified("You must close the previous field before starting a new one"))
 		}
+	}
+
+	pub fn flush(&mut self) -> io::Result<()> {
+		self.target.target.flush()
 	}
 }
 
