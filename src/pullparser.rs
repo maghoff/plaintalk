@@ -58,6 +58,22 @@ impl<'a> PullParser<'a> {
 			PullParserState::Error(err) => Err(err),
 		}
 	}
+
+	pub fn read_message(&mut self) -> Result<Option<Vec<Vec<u8>>>, Error> {
+		if let Some(mut message) = try!{self.get_message()} {
+			let mut buffered_message = Vec::<Vec<u8>>::new();
+			loop {
+				let mut buffered_field = Vec::<u8>::new();
+				match try!{message.read_field_to_end(&mut buffered_field)} {
+					Some(_) => buffered_message.push(buffered_field),
+					None => break
+				}
+			}
+			Ok(Some(buffered_message))
+		} else {
+			Ok(None)
+		}
+	}
 }
 
 enum MessageParserState {
@@ -458,5 +474,14 @@ mod test {
 			let result = message.read_field_to_end(&mut buffer).unwrap();
 			assert!(result.is_none());
 		}
+	}
+
+	#[test]
+	fn parser_can_read_a_message() {
+		let mut data = Cursor::new(String::from("0 protocol lol\n2 lol\n").into_bytes());
+		let mut parser = PullParser::new(&mut data);
+
+		assert_eq!([b"0".to_vec(), b"protocol".to_vec(), b"lol".to_vec()].to_vec(), parser.read_message().unwrap().unwrap());
+		assert_eq!([b"2".to_vec(), b"lol".to_vec()].to_vec(), parser.read_message().unwrap().unwrap());
 	}
 }
