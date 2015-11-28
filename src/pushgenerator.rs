@@ -122,9 +122,29 @@ impl<'a, 'b, 'c> Drop for Field<'a, 'b, 'c> {
 	}
 }
 
+const CURLY_L: u8 = '{' as u8;
+const SP: u8 = ' ' as u8;
+const CR: u8 = '\r' as u8;
+const LF: u8 = '\n' as u8;
+
+fn should_escape(buf: &[u8]) -> bool {
+	if buf.len() > 100 {
+		true
+	} else {
+		buf.iter().position(|&x| x == CURLY_L || x == SP || x == CR || x == LF).is_some()
+	}
+}
+
 impl<'a, 'b, 'c> Write for Field<'a, 'b, 'c> {
 	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-		self.target.target.target.write(buf)
+		// TODO Handle errors. Should an error put the generator into a failed state?
+
+		let inner_stream = &mut self.target.target.target;
+		if should_escape(buf) {
+			try!{write!(inner_stream, "{{{}}}", buf.len())}
+		}
+		try!{inner_stream.write_all(buf)}
+		Ok(buf.len())
 	}
 
 	fn flush(&mut self) -> io::Result<()> {
@@ -160,5 +180,28 @@ mod test {
 		}
 
 		assert_eq!(String::from("0 lol\n").into_bytes(), buffer);
+	}
+
+	#[test]
+	fn it_escapes_control_characters() {
+		let mut buffer = Vec::<u8>::new();
+
+		{
+			let mut generator = PushGenerator::new(&mut buffer);
+
+			{
+				let mut message = generator.next_message().unwrap();
+
+				{
+					let mut field = message.next_field().unwrap();
+					field.write_all(b" ").unwrap();
+					field.write_all(b"\r").unwrap();
+					field.write_all(b"\n").unwrap();
+					field.write_all(b"{").unwrap();
+				}
+			}
+		}
+
+		assert_eq!(String::from("{1} {1}\r{1}\n{1}{\n").into_bytes(), buffer);
 	}
 }
