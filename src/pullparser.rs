@@ -1,7 +1,9 @@
 extern crate num;
 
 use std;
-use std::io::{Read, Result, Error, ErrorKind};
+use std::convert;
+use std::result::Result;
+use std::io::{self, Read, ErrorKind};
 use self::num::traits::{CheckedAdd, CheckedMul};
 
 const CURLY_L: u8 = '{' as u8;
@@ -11,6 +13,24 @@ const CR: u8 = '\r' as u8;
 const LF: u8 = '\n' as u8;
 const NUM_0: u8 = '0' as u8;
 const NUM_9: u8 = '9' as u8;
+
+#[derive(Debug)]
+pub enum Error {
+	Io(io::Error),
+	Unspecified(&'static str),
+}
+
+impl convert::From<io::Error> for Error {
+	fn from(err: io::Error) -> Error {
+		Error::Io(err)
+	}
+}
+
+impl convert::From<&'static str> for Error {
+	fn from(err: &'static str) -> Error {
+		Error::Unspecified(err)
+	}
+}
 
 enum PullParserState {
 	Initial,
@@ -31,7 +51,7 @@ impl<'a> PullParser<'a> {
 		}
 	}
 
-	pub fn get_message<'x, 'y: 'x+'y>(&'y mut self) -> std::result::Result<Option<Message<'x, 'a>>, &'static str> {
+	pub fn get_message<'x, 'y: 'x+'y>(&'y mut self) -> Result<Option<Message<'x, 'a>>, &'static str> {
 		match self.state {
 			PullParserState::Initial => Ok(Some(Message::new(self))),
 			PullParserState::Done => Ok(None),
@@ -71,6 +91,13 @@ impl<'a, 'b> Message<'a, 'b> {
 			MessageParserState::Error(err) => Err(err),
 		}
 	}
+
+	pub fn ignore_rest(&mut self) -> Result<(), Error> {
+		while let Some(mut field) = try!{self.get_field()} {
+			try!{field.ignore_rest()};
+		}
+		Ok(())
+	}
 }
 
 enum FieldParserState {
@@ -93,6 +120,11 @@ impl<'a, 'b, 'c> Field<'a, 'b, 'c> {
 		}
 	}
 
+	pub fn ignore_rest(&mut self) -> Result<(), Error> {
+		let mut buf = [0u8; 256];
+		while try!{self.read(&mut buf)} > 0 {}
+		Ok(())
+	}
 }
 
 fn parse_escape_header<T:Read>(bytes: &mut std::io::Bytes<T>) -> std::result::Result<usize, (ErrorKind, &'static str)> {
@@ -114,7 +146,7 @@ fn parse_escape_header<T:Read>(bytes: &mut std::io::Bytes<T>) -> std::result::Re
 }
 
 impl<'a, 'b, 'c> Read for Field<'a, 'b, 'c> {
-	fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
 		let reader = &mut self.source.source.source;
 		let mut cursor:usize = 0;
 
@@ -190,7 +222,7 @@ impl<'a, 'b, 'c> Read for Field<'a, 'b, 'c> {
 					if cursor > 0 {
 						break;
 					} else {
-						return Err(Error::new(kind, data.clone()));
+						return Err(io::Error::new(kind, data.clone()));
 					}
 				},
 			}
@@ -289,5 +321,43 @@ mod test {
 			],
 			buffer_all_messages(&mut parser)
 		);
+	}
+
+	#[test]
+	fn it_can_ignore_a_field() {
+		let mut data = Cursor::new(String::from("field1 field2\n").into_bytes());
+		let mut parser = PullParser::new(&mut data);
+
+		let mut message = parser.get_message().unwrap().unwrap();
+
+		message.get_field().unwrap().unwrap().ignore_rest().unwrap();
+
+		let mut buffer = String::new();
+		message.get_field().unwrap().unwrap().read_to_string(&mut buffer).unwrap();
+		assert_eq!("field2", buffer);
+	}
+
+	#[test]
+	fn it_can_ignore_a_message() {
+		let mut data = Cursor::new(String::from("msg1 msg1field2\nmsg2 msg2field2\n").into_bytes());
+		let mut parser = PullParser::new(&mut data);
+
+		let mut buffer = String::new();
+
+		{
+			let mut message = parser.get_message().unwrap().unwrap();
+			message.get_field().unwrap().unwrap().read_to_string(&mut buffer).unwrap();
+			assert_eq!("msg1", buffer);
+			buffer.clear();
+			message.ignore_rest().unwrap();
+		}
+
+		{
+			let mut message = parser.get_message().unwrap().unwrap();
+			message.get_field().unwrap().unwrap().read_to_string(&mut buffer).unwrap();
+			assert_eq!("msg2", buffer);
+			buffer.clear();
+			message.ignore_rest().unwrap();
+		}
 	}
 }
