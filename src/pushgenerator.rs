@@ -1,8 +1,17 @@
+use std::convert;
 use std::io::{self, Write};
 
 #[derive(Debug, Clone)]
 pub enum Error {
+// 	Io(io::Error),
 	Unspecified(&'static str),
+}
+
+impl convert::From<io::Error> for Error {
+	fn from(_err: io::Error) -> Error {
+// 		Error::Io(err)
+		Error::Unspecified("IO error")
+	}
 }
 
 enum PushGeneratorState {
@@ -46,6 +55,14 @@ impl<'a> PushGenerator<'a> {
 	fn auto_flush(&self) -> bool {
 		self.auto_flush
 	}
+
+	pub fn write_message(&mut self, msg: &[&[u8]]) -> Result<(), Error> {
+		let mut message = try!{self.next_message()};
+		for &fieldbuf in msg {
+			try!{message.write_field(&fieldbuf)};
+		}
+		Ok(())
+	}
 }
 
 enum MessageState {
@@ -87,6 +104,12 @@ impl<'a, 'b> Message<'a, 'b> {
 
 	pub fn flush(&mut self) -> io::Result<()> {
 		self.target.target.flush()
+	}
+
+	pub fn write_field(&mut self, buf: &[u8]) -> Result<(), Error> {
+		let mut field = try!{self.next_field()};
+		try!{field.write(buf)};
+		Ok(())
 	}
 }
 
@@ -203,5 +226,25 @@ mod test {
 		}
 
 		assert_eq!(String::from("{1} {1}\r{1}\n{1}{\n").into_bytes(), buffer);
+	}
+
+	#[test]
+	fn it_has_convenience_functions() {
+		let mut buffer = Vec::<u8>::new();
+
+		{
+			let mut generator = PushGenerator::new(&mut buffer);
+
+			{
+				let mut message = generator.next_message().unwrap();
+				message.write_field(b"apekatt").unwrap();
+				message.write_field(b"katter ape").unwrap();
+			}
+
+			generator.write_message(&[b"0", b"error", b"success"]).unwrap();
+			generator.write_message(&[b"1"]).unwrap();
+		}
+
+		assert_eq!(String::from("apekatt {10}katter ape\n0 error success\n1\n").into_bytes(), buffer);
 	}
 }
