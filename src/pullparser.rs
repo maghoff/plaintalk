@@ -126,6 +126,18 @@ impl<'a, 'b> Message<'a, 'b> {
 			}
 		}
 	}
+
+	pub fn read_field_to_end(&mut self, buf: &mut Vec<u8>) -> Result<Option<usize>, Error> {
+		match try!{self.get_field()} {
+			Some(mut field) => {
+				let len = try!{field.read_to_end(buf)};
+				Ok(Some(len))
+			},
+			None => {
+				Ok(None)
+			}
+		}
+	}
 }
 
 enum FieldParserState {
@@ -399,13 +411,13 @@ mod test {
 		{
 			let buffer = &mut [0u8; 8];
 			let len = message.read_field(buffer).unwrap().unwrap();
-			assert_eq!(b"0".into_iter().collect::<Vec<_>>(), buffer[0..len].into_iter().collect::<Vec<_>>());
+			assert_eq!(b"0".to_vec(), buffer[0..len].to_vec());
 		}
 
 		{
 			let buffer = &mut [0u8; 8];
 			let len = message.read_field(buffer).unwrap().unwrap();
-			assert_eq!(b"protocol".into_iter().collect::<Vec<_>>(), buffer[0..len].into_iter().collect::<Vec<_>>());
+			assert_eq!(b"protocol".to_vec(), buffer[0..len].to_vec());
 		}
 	}
 
@@ -418,10 +430,33 @@ mod test {
 
 		{
 			let buffer = &mut [0u8; 4];
-			match message.read_field(buffer) {
-				Ok(_) => panic!("read_field failed to detect overflow"),
-				Err(_) => (),
-			}
+			assert!(message.read_field(buffer).is_err());
+		}
+	}
+
+	#[test]
+	fn message_can_read_field_to_end() {
+		let mut data = Cursor::new(String::from("0 protocol\n").into_bytes());
+		let mut parser = PullParser::new(&mut data);
+
+		let mut message = parser.get_message().unwrap().unwrap();
+
+		{
+			let mut buffer = Vec::<u8>::new();
+			message.read_field_to_end(&mut buffer).unwrap().unwrap();
+			assert_eq!(b"0".to_vec(), buffer);
+		}
+
+		{
+			let mut buffer = Vec::<u8>::new();
+			message.read_field_to_end(&mut buffer).unwrap().unwrap();
+			assert_eq!(b"protocol".to_vec(), buffer);
+		}
+
+		{
+			let mut buffer = Vec::<u8>::new();
+			let result = message.read_field_to_end(&mut buffer).unwrap();
+			assert!(result.is_none());
 		}
 	}
 }
