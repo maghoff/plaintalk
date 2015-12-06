@@ -154,6 +154,33 @@ impl<'a, 'b> Message<'a, 'b> {
 			}
 		}
 	}
+
+	pub fn read_field_as_string(&mut self) -> Result<Option<String>, Error> {
+		let mut string = String::new();
+		match try!{self.get_field()} {
+			Some(mut field) => {
+				try!{field.read_to_string(&mut string)};
+				Ok(Some(string))
+			},
+			None => Ok(None)
+		}
+	}
+
+	pub fn read_field_as_slice<'x, 'y: 'x+'y>(&mut self, buffer: &'y mut[u8]) -> Result<Option<&'x [u8]>, Error> {
+		match try!{self.read_field(buffer)} {
+			Some(len) => {
+				Ok(Some(&buffer[0..len]))
+			},
+			None => Ok(None)
+		}
+	}
+
+	pub fn at_end(&self) -> bool {
+		match self.state {
+			MessageParserState::Done => true,
+			_ => false
+		}
+	}
 }
 
 enum FieldParserState {
@@ -474,6 +501,43 @@ mod test {
 			let result = message.read_field_to_end(&mut buffer).unwrap();
 			assert!(result.is_none());
 		}
+	}
+
+	#[test]
+	fn message_can_read_field_as_string() {
+		let mut data = Cursor::new(String::from("0 protocol\n").into_bytes());
+		let mut parser = PullParser::new(&mut data);
+
+		let mut message = parser.get_message().unwrap().unwrap();
+
+		assert_eq!("0", message.read_field_as_string().unwrap().unwrap());
+		assert_eq!("protocol", message.read_field_as_string().unwrap().unwrap());
+	}
+
+	#[test]
+	fn message_can_read_field_as_slice() {
+		let mut data = Cursor::new(String::from("0 protocol\n").into_bytes());
+		let mut parser = PullParser::new(&mut data);
+
+		let mut message = parser.get_message().unwrap().unwrap();
+		let mut buffer = [0u8;10];
+
+		assert_eq!(b"0", message.read_field_as_slice(&mut buffer).unwrap().unwrap());
+		assert_eq!(b"protocol", message.read_field_as_slice(&mut buffer).unwrap().unwrap());
+	}
+
+	#[test]
+	fn message_can_tell_if_it_is_at_the_end() {
+		let mut data = Cursor::new(String::from("0 protocol\n").into_bytes());
+		let mut parser = PullParser::new(&mut data);
+
+		let mut message = parser.get_message().unwrap().unwrap();
+
+		assert_eq!(false, message.at_end());
+		message.read_field_as_string().unwrap();
+		assert_eq!(false, message.at_end());
+		message.read_field_as_string().unwrap();
+		assert_eq!(true, message.at_end());
 	}
 
 	#[test]
