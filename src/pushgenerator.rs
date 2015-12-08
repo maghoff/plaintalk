@@ -20,14 +20,14 @@ enum PushGeneratorState {
 	Error(Error),
 }
 
-pub struct PushGenerator<'a> {
-	target: &'a mut Write,
+pub struct PushGenerator<W: Write> {
+	target: W,
 	state: PushGeneratorState,
 	auto_flush: bool,
 }
 
-impl<'a> PushGenerator<'a> {
-	pub fn new<'x>(target: &'x mut Write) -> PushGenerator<'x> {
+impl<W: Write> PushGenerator<W> {
+	pub fn new(target: W) -> PushGenerator<W> {
 		PushGenerator {
 			target: target,
 			state: PushGeneratorState::Initial,
@@ -35,11 +35,11 @@ impl<'a> PushGenerator<'a> {
 		}
 	}
 
-	pub fn next_message<'x, 'y: 'x+'y>(&'y mut self) -> Result<Message<'x, 'a>, Error> {
+	pub fn next_message<'x, 'y: 'x+'y>(&'y mut self) -> Result<Message<'x, W>, Error> {
 		match self.state {
 			PushGeneratorState::Initial => {
 				self.state = PushGeneratorState::GeneratingMessage;
-				Ok(Message::new(self))
+				Ok(Message::<'x, W>::new(self))
 			},
 			PushGeneratorState::GeneratingMessage => {
 				Err(Error::Unspecified("Finish message before starting a new one"))
@@ -71,31 +71,31 @@ enum MessageState {
 	GeneratingField,
 }
 
-pub struct Message<'a, 'b: 'a+'b> {
-	target: &'a mut PushGenerator<'b>,
+pub struct Message<'a, W: 'a + Write> {
+	target: &'a mut PushGenerator<W>,
 	state: MessageState,
 }
 
-impl<'a, 'b> Message<'a, 'b> {
-	fn new<'x, 'y: 'x+'y>(target: &'x mut PushGenerator<'y>) -> Message<'x, 'y> {
+impl<'a, W: Write> Message<'a, W> {
+	fn new<'x, T: 'x + Write>(target: &'x mut PushGenerator<T>) -> Message<'x, T> {
 		Message {
 			target: target,
 			state: MessageState::BeforeFirstField,
 		}
 	}
 
-	pub fn next_field<'x, 'y: 'x+'y>(&'y mut self) -> Result<Field<'x, 'a, 'b>, Error> {
+	pub fn next_field<'x, 'y: 'x+'y>(&'y mut self) -> Result<Field<'x, 'a, W>, Error> {
 		match self.state {
 			MessageState::BeforeFirstField => {
 				self.state = MessageState::GeneratingField;
-				Ok(Field::new(self))
+				Ok(Field::<'x, 'a, W>::new(self))
 			},
 			MessageState::AfterFirstField => {
 				// TODO Handle failure. Should the generator get into a failed
 				// state? Or are we able to try the same operation again?
 				if let Err(_err) = self.target.target.write_all(b" ") { return Err(Error::Unspecified("Nested error")); }
 				self.state = MessageState::GeneratingField;
-				Ok(Field::new(self))
+				Ok(Field::<'x, 'a, W>::new(self))
 			},
 			MessageState::GeneratingField =>
 				Err(Error::Unspecified("You must close the previous field before starting a new one"))
@@ -113,7 +113,7 @@ impl<'a, 'b> Message<'a, 'b> {
 	}
 }
 
-impl<'a, 'b> Drop for Message<'a, 'b> {
+impl<'a, W: Write> Drop for Message<'a, W> {
 	fn drop(&mut self) {
 		self.target.state = match self.target.target.write_all(&['\n' as u8]) {
 			Ok(()) => PushGeneratorState::Initial,
@@ -127,19 +127,19 @@ impl<'a, 'b> Drop for Message<'a, 'b> {
 	}
 }
 
-pub struct Field<'a, 'b: 'a + 'b, 'c: 'b + 'c> {
-	target: &'a mut Message<'b, 'c>,
+pub struct Field<'a, 'b: 'a + 'b, W: 'b + Write> {
+	target: &'a mut Message<'b, W>,
 }
 
-impl<'a, 'b, 'c> Field<'a, 'b, 'c> {
-	fn new<'x, 'y, 'z>(target: &'x mut Message<'y, 'z>) -> Field<'x, 'y, 'z> {
+impl<'a, 'b, W: Write> Field<'a, 'b, W> {
+	fn new<'x, 'y, T: 'y + Write>(target: &'x mut Message<'y, T>) -> Field<'x, 'y, T> {
 		Field {
 			target: target,
 		}
 	}
 }
 
-impl<'a, 'b, 'c> Drop for Field<'a, 'b, 'c> {
+impl<'a, 'b, W: Write> Drop for Field<'a, 'b, W> {
 	fn drop(&mut self) {
 		self.target.state = MessageState::AfterFirstField;
 	}
@@ -158,7 +158,7 @@ fn should_escape(buf: &[u8]) -> bool {
 	}
 }
 
-impl<'a, 'b, 'c> Write for Field<'a, 'b, 'c> {
+impl<'a, 'b, W: Write> Write for Field<'a, 'b, W> {
 	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
 		// TODO Handle errors. Should an error put the generator into a failed state?
 
