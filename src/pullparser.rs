@@ -86,6 +86,7 @@ enum MessageParserState {
 pub struct Message<'a, R: 'a + Read> {
 	source: &'a mut PullParser<R>,
 	state: MessageParserState,
+	empty: bool,
 }
 
 impl<'a, R: Read> Message<'a, R> {
@@ -93,6 +94,7 @@ impl<'a, R: Read> Message<'a, R> {
 		Message {
 			source: source,
 			state: MessageParserState::ExpectingField,
+			empty: true,
 		}
 	}
 
@@ -255,14 +257,18 @@ impl<'a, 'b, R: Read> Read for Field<'a, 'b, R> {
 								self.state = FieldParserState::Done;
 							},
 							Some(Ok(LF)) => {
-								self.source.state = MessageParserState::Done;
-								self.state = FieldParserState::Done;
+								if !(self.source.empty && cursor == 0) {
+									self.source.state = MessageParserState::Done;
+									self.state = FieldParserState::Done;
+								}
 							},
 							Some(Ok(CR)) => {
 								match bytes.next() {
 									Some(Ok(LF)) => {
-										self.source.state = MessageParserState::Done;
-										self.state = FieldParserState::Done;
+										if !(self.source.empty && cursor == 0) {
+											self.source.state = MessageParserState::Done;
+											self.state = FieldParserState::Done;
+										}
 									},
 									_ => {
 										self.source.source.state = PullParserState::Error("Invalid byte after CR");
@@ -276,14 +282,19 @@ impl<'a, 'b, R: Read> Read for Field<'a, 'b, R> {
 								cursor += 1;
 							},
 							Some(Err(err)) => {
+								// TODO Maybe put the whole parser in an error state?
 								return Err(err)
 							},
 							None => {
-								// TODO It should be considered an error to reach EOF unless
-								// we are at the very beginning of a message
-								self.source.source.state = PullParserState::Done;
-								self.source.state = MessageParserState::Done;
-								self.state = FieldParserState::Done;
+								if self.source.empty && (cursor == 0) {
+									self.source.source.state = PullParserState::Done;
+									self.source.state = MessageParserState::Done;
+									self.state = FieldParserState::Done;
+								} else {
+									self.source.source.state = PullParserState::Error("Unexpected EOF");
+									self.source.state = MessageParserState::Error("Unexpected EOF");
+									self.state = FieldParserState::Error(ErrorKind::InvalidData, "Unexpected EOF");
+								}
 							}
 						}
 					}
@@ -310,6 +321,7 @@ impl<'a, 'b, R: Read> Read for Field<'a, 'b, R> {
 				},
 			}
 		}
+		self.source.empty = self.source.empty && (cursor == 0);
 		Ok(cursor)
 	}
 }
@@ -361,7 +373,7 @@ mod test {
 
 	#[test]
 	fn it_can_parse_several_messages() {
-		let mut data = Cursor::new(String::from("0 ape katt\n1 tam ape\n2 lol").into_bytes());
+		let mut data = Cursor::new(String::from("0 ape katt\n1 tam ape\n2 lol\n").into_bytes());
 		let mut parser = PullParser::new(&mut data);
 
 		assert_eq!(
@@ -369,6 +381,7 @@ mod test {
 				vec!["0", "ape", "katt"],
 				vec!["1", "tam", "ape"],
 				vec!["2", "lol"],
+				vec![""],
 			],
 			buffer_all_messages(&mut parser)
 		);
@@ -543,6 +556,15 @@ mod test {
 	#[test]
 	fn parser_can_read_a_message() {
 		let mut data = Cursor::new(String::from("0 protocol lol\n2 lol\n").into_bytes());
+		let mut parser = PullParser::new(&mut data);
+
+		assert_eq!([b"0".to_vec(), b"protocol".to_vec(), b"lol".to_vec()].to_vec(), parser.read_message().unwrap().unwrap());
+		assert_eq!([b"2".to_vec(), b"lol".to_vec()].to_vec(), parser.read_message().unwrap().unwrap());
+	}
+
+	#[test]
+	fn it_ignores_empty_lines() {
+		let mut data = Cursor::new(String::from("0 protocol lol\n\n{}\n{0}{00}{000}\n2 lol\n").into_bytes());
 		let mut parser = PullParser::new(&mut data);
 
 		assert_eq!([b"0".to_vec(), b"protocol".to_vec(), b"lol".to_vec()].to_vec(), parser.read_message().unwrap().unwrap());
