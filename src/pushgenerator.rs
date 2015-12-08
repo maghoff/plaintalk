@@ -21,15 +21,15 @@ enum PushGeneratorState {
 }
 
 pub struct PushGenerator<W: Write> {
-	target: W,
+	inner: W,
 	state: PushGeneratorState,
 	auto_flush: bool,
 }
 
 impl<W: Write> PushGenerator<W> {
-	pub fn new(target: W) -> PushGenerator<W> {
+	pub fn new(inner: W) -> PushGenerator<W> {
 		PushGenerator {
-			target: target,
+			inner: inner,
 			state: PushGeneratorState::Initial,
 			auto_flush: true,
 		}
@@ -49,7 +49,7 @@ impl<W: Write> PushGenerator<W> {
 	}
 
 	pub fn flush(&mut self) -> io::Result<()> {
-		self.target.flush()
+		self.inner.flush()
 	}
 
 	fn auto_flush(&self) -> bool {
@@ -72,14 +72,14 @@ enum MessageState {
 }
 
 pub struct Message<'a, W: 'a + Write> {
-	target: &'a mut PushGenerator<W>,
+	inner: &'a mut PushGenerator<W>,
 	state: MessageState,
 }
 
 impl<'a, W: Write> Message<'a, W> {
-	fn new(target: &'a mut PushGenerator<W>) -> Message<'a, W> {
+	fn new(inner: &'a mut PushGenerator<W>) -> Message<'a, W> {
 		Message {
-			target: target,
+			inner: inner,
 			state: MessageState::BeforeFirstField,
 		}
 	}
@@ -93,7 +93,7 @@ impl<'a, W: Write> Message<'a, W> {
 			MessageState::AfterFirstField => {
 				// TODO Handle failure. Should the generator get into a failed
 				// state? Or are we able to try the same operation again?
-				if let Err(_err) = self.target.target.write_all(b" ") { return Err(Error::Unspecified("Nested error")); }
+				if let Err(_err) = self.inner.inner.write_all(b" ") { return Err(Error::Unspecified("Nested error")); }
 				self.state = MessageState::GeneratingField;
 				Ok(Field::new(self))
 			},
@@ -103,7 +103,7 @@ impl<'a, W: Write> Message<'a, W> {
 	}
 
 	pub fn flush(&mut self) -> io::Result<()> {
-		self.target.target.flush()
+		self.inner.inner.flush()
 	}
 
 	pub fn write_field(&mut self, buf: &[u8]) -> Result<(), Error> {
@@ -115,33 +115,33 @@ impl<'a, W: Write> Message<'a, W> {
 
 impl<'a, W: Write> Drop for Message<'a, W> {
 	fn drop(&mut self) {
-		self.target.state = match self.target.target.write_all(&['\n' as u8]) {
+		self.inner.state = match self.inner.inner.write_all(&['\n' as u8]) {
 			Ok(()) => PushGeneratorState::Initial,
 			Err(_err) => PushGeneratorState::Error(Error::Unspecified("Nested error")),
 		};
-		if self.target.auto_flush() {
-			if let Err(_err) = self.target.target.flush() {
-				self.target.state = PushGeneratorState::Error(Error::Unspecified("Autoflush failed"));
+		if self.inner.auto_flush() {
+			if let Err(_err) = self.inner.inner.flush() {
+				self.inner.state = PushGeneratorState::Error(Error::Unspecified("Autoflush failed"));
 			}
 		}
 	}
 }
 
 pub struct Field<'a, 'b: 'a + 'b, W: 'b + Write> {
-	target: &'a mut Message<'b, W>,
+	inner: &'a mut Message<'b, W>,
 }
 
 impl<'a, 'b, W: Write> Field<'a, 'b, W> {
-	fn new(target: &'a mut Message<'b, W>) -> Field<'a, 'b, W> {
+	fn new(inner: &'a mut Message<'b, W>) -> Field<'a, 'b, W> {
 		Field {
-			target: target,
+			inner: inner,
 		}
 	}
 }
 
 impl<'a, 'b, W: Write> Drop for Field<'a, 'b, W> {
 	fn drop(&mut self) {
-		self.target.state = MessageState::AfterFirstField;
+		self.inner.state = MessageState::AfterFirstField;
 	}
 }
 
@@ -162,7 +162,7 @@ impl<'a, 'b, W: Write> Write for Field<'a, 'b, W> {
 	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
 		// TODO Handle errors. Should an error put the generator into a failed state?
 
-		let inner_stream = &mut self.target.target.target;
+		let inner_stream = &mut self.inner.inner.inner;
 		if should_escape(buf) {
 			try!{write!(inner_stream, "{{{}}}", buf.len())}
 		}
@@ -171,7 +171,7 @@ impl<'a, 'b, W: Write> Write for Field<'a, 'b, W> {
 	}
 
 	fn flush(&mut self) -> io::Result<()> {
-		self.target.target.target.flush()
+		self.inner.inner.inner.flush()
 	}
 }
 

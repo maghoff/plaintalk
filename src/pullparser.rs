@@ -39,14 +39,14 @@ enum PullParserState {
 }
 
 pub struct PullParser<R> {
-	source: R,
+	inner: R,
 	state: PullParserState,
 }
 
 impl<R: Read> PullParser<R> {
-	pub fn new(source: R) -> PullParser<R> {
+	pub fn new(inner: R) -> PullParser<R> {
 		PullParser {
-			source: source,
+			inner: inner,
 			state: PullParserState::Initial,
 		}
 	}
@@ -84,15 +84,15 @@ enum MessageParserState {
 }
 
 pub struct Message<'a, R: 'a + Read> {
-	source: &'a mut PullParser<R>,
+	inner: &'a mut PullParser<R>,
 	state: MessageParserState,
 	empty: bool,
 }
 
 impl<'a, R: Read> Message<'a, R> {
-	fn new(source: &'a mut PullParser<R>) -> Message<'a, R> {
+	fn new(inner: &'a mut PullParser<R>) -> Message<'a, R> {
 		Message {
-			source: source,
+			inner: inner,
 			state: MessageParserState::ExpectingField,
 			empty: true,
 		}
@@ -193,14 +193,14 @@ enum FieldParserState {
 }
 
 pub struct Field<'a, 'b: 'a + 'b, R: 'b + Read> {
-	source: &'a mut Message<'b, R>,
+	inner: &'a mut Message<'b, R>,
 	state: FieldParserState,
 }
 
 impl<'a, 'b, R: Read> Field<'a, 'b, R> {
-	fn new(source: &'a mut Message<'b, R>) -> Field<'a, 'b, R> {
+	fn new(inner: &'a mut Message<'b, R>) -> Field<'a, 'b, R> {
 		Field {
-			source: source,
+			inner: inner,
 			state: FieldParserState::Initial,
 		}
 	}
@@ -232,7 +232,7 @@ fn parse_escape_header<T:Read>(bytes: &mut std::io::Bytes<T>) -> std::result::Re
 
 impl<'a, 'b, R: Read> Read for Field<'a, 'b, R> {
 	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-		let reader = &mut self.source.source.source;
+		let reader = &mut self.inner.inner.inner;
 		let mut cursor:usize = 0;
 
 		while cursor < buf.len() {
@@ -246,33 +246,33 @@ impl<'a, 'b, R: Read> Read for Field<'a, 'b, R> {
 								match parse_escape_header(&mut bytes) {
 									Ok(escaped_bytes) => self.state = FieldParserState::ReadingEscapedBytes(escaped_bytes),
 									Err(err) => {
-										self.source.source.state = PullParserState::Error(err.1);
-										self.source.state = MessageParserState::Error(err.1);
+										self.inner.inner.state = PullParserState::Error(err.1);
+										self.inner.state = MessageParserState::Error(err.1);
 										self.state = FieldParserState::Error(err.0, err.1);
 									}
 								}
 							},
 							Some(Ok(SP)) => {
-								self.source.state = MessageParserState::ExpectingField;
+								self.inner.state = MessageParserState::ExpectingField;
 								self.state = FieldParserState::Done;
 							},
 							Some(Ok(LF)) => {
-								if !(self.source.empty && cursor == 0) {
-									self.source.state = MessageParserState::Done;
+								if !(self.inner.empty && cursor == 0) {
+									self.inner.state = MessageParserState::Done;
 									self.state = FieldParserState::Done;
 								}
 							},
 							Some(Ok(CR)) => {
 								match bytes.next() {
 									Some(Ok(LF)) => {
-										if !(self.source.empty && cursor == 0) {
-											self.source.state = MessageParserState::Done;
+										if !(self.inner.empty && cursor == 0) {
+											self.inner.state = MessageParserState::Done;
 											self.state = FieldParserState::Done;
 										}
 									},
 									_ => {
-										self.source.source.state = PullParserState::Error("Invalid byte after CR");
-										self.source.state = MessageParserState::Error("Invalid byte after CR");
+										self.inner.inner.state = PullParserState::Error("Invalid byte after CR");
+										self.inner.state = MessageParserState::Error("Invalid byte after CR");
 										self.state = FieldParserState::Error(ErrorKind::InvalidData, "Invalid byte after CR");
 									}
 								}
@@ -286,13 +286,13 @@ impl<'a, 'b, R: Read> Read for Field<'a, 'b, R> {
 								return Err(err)
 							},
 							None => {
-								if self.source.empty && (cursor == 0) {
-									self.source.source.state = PullParserState::Done;
-									self.source.state = MessageParserState::Done;
+								if self.inner.empty && (cursor == 0) {
+									self.inner.inner.state = PullParserState::Done;
+									self.inner.state = MessageParserState::Done;
 									self.state = FieldParserState::Done;
 								} else {
-									self.source.source.state = PullParserState::Error("Unexpected EOF");
-									self.source.state = MessageParserState::Error("Unexpected EOF");
+									self.inner.inner.state = PullParserState::Error("Unexpected EOF");
+									self.inner.state = MessageParserState::Error("Unexpected EOF");
 									self.state = FieldParserState::Error(ErrorKind::InvalidData, "Unexpected EOF");
 								}
 							}
@@ -321,7 +321,7 @@ impl<'a, 'b, R: Read> Read for Field<'a, 'b, R> {
 				},
 			}
 		}
-		self.source.empty = self.source.empty && (cursor == 0);
+		self.inner.empty = self.inner.empty && (cursor == 0);
 		Ok(cursor)
 	}
 }
