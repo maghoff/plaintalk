@@ -38,20 +38,20 @@ enum PullParserState {
 	Error(&'static str),
 }
 
-pub struct PullParser<'a> {
-	source: &'a mut Read,
+pub struct PullParser<R> {
+	source: R,
 	state: PullParserState,
 }
 
-impl<'a> PullParser<'a> {
-	pub fn new<'b>(source: &'b mut Read) -> PullParser<'b> {
+impl<R: Read> PullParser<R> {
+	pub fn new(source: R) -> PullParser<R> {
 		PullParser {
 			source: source,
 			state: PullParserState::Initial,
 		}
 	}
 
-	pub fn get_message<'x, 'y: 'x+'y>(&'y mut self) -> Result<Option<Message<'x, 'a>>, &'static str> {
+	pub fn get_message<'x, 'y: 'x+'y>(&'y mut self) -> Result<Option<Message<'x, R>>, &'static str> {
 		match self.state {
 			PullParserState::Initial => Ok(Some(Message::new(self))),
 			PullParserState::Done => Ok(None),
@@ -61,9 +61,9 @@ impl<'a> PullParser<'a> {
 
 	pub fn read_message(&mut self) -> Result<Option<Vec<Vec<u8>>>, Error> {
 		if let Some(mut message) = try!{self.get_message()} {
-			let mut buffered_message = Vec::<Vec<u8>>::new();
+			let mut buffered_message = Vec::new();
 			loop {
-				let mut buffered_field = Vec::<u8>::new();
+				let mut buffered_field = Vec::new();
 				match try!{message.read_field_to_end(&mut buffered_field)} {
 					Some(_) => buffered_message.push(buffered_field),
 					None => break
@@ -83,20 +83,20 @@ enum MessageParserState {
 	Error(&'static str),
 }
 
-pub struct Message<'a, 'b: 'a + 'b> {
-	source: &'a mut PullParser<'b>,
+pub struct Message<'a, R: 'a + Read> {
+	source: &'a mut PullParser<R>,
 	state: MessageParserState,
 }
 
-impl<'a, 'b> Message<'a, 'b> {
-	fn new(source: &'a mut PullParser<'b>) -> Message<'a, 'b> {
+impl<'a, R: Read> Message<'a, R> {
+	fn new(source: &'a mut PullParser<R>) -> Message<'a, R> {
 		Message {
 			source: source,
 			state: MessageParserState::ExpectingField,
 		}
 	}
 
-	pub fn get_field<'x, 'y: 'x+'y>(&'y mut self) -> std::result::Result<Option<Field<'x, 'a, 'b>>, &'static str> {
+	pub fn get_field<'x, 'y: 'x+'y>(&'y mut self) -> std::result::Result<Option<Field<'x, 'a, R>>, &'static str> {
 		match self.state {
 			MessageParserState::ExpectingField => {
 				self.state = MessageParserState::ReadingField;
@@ -190,13 +190,13 @@ enum FieldParserState {
 	Error(ErrorKind, &'static str)
 }
 
-pub struct Field<'a, 'b: 'a + 'b, 'c: 'b + 'c> {
-	source: &'a mut Message<'b, 'c>,
+pub struct Field<'a, 'b: 'a + 'b, R: 'b + Read> {
+	source: &'a mut Message<'b, R>,
 	state: FieldParserState,
 }
 
-impl<'a, 'b, 'c> Field<'a, 'b, 'c> {
-	fn new(source: &'a mut Message<'b, 'c>) -> Field<'a, 'b, 'c> {
+impl<'a, 'b, R: Read> Field<'a, 'b, R> {
+	fn new(source: &'a mut Message<'b, R>) -> Field<'a, 'b, R> {
 		Field {
 			source: source,
 			state: FieldParserState::Initial,
@@ -228,7 +228,7 @@ fn parse_escape_header<T:Read>(bytes: &mut std::io::Bytes<T>) -> std::result::Re
 	}
 }
 
-impl<'a, 'b, 'c> Read for Field<'a, 'b, 'c> {
+impl<'a, 'b, R: Read> Read for Field<'a, 'b, R> {
 	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
 		let reader = &mut self.source.source.source;
 		let mut cursor:usize = 0;
@@ -319,8 +319,8 @@ mod test {
 	use std::io::{Read, Cursor};
 	use pullparser::*;
 
-	fn buffer_message(message: &mut Message) -> Vec<String> {
-		let mut parsed_message = Vec::<String>::new();
+	fn buffer_message<R: Read>(message: &mut Message<R>) -> Vec<String> {
+		let mut parsed_message = Vec::new();
 		while let Ok(Some(mut field)) = message.get_field() {
 			let mut buffer = String::new();
 			field.read_to_string(&mut buffer).unwrap();
@@ -329,8 +329,8 @@ mod test {
 		parsed_message
 	}
 
-	fn buffer_all_messages(parser: &mut PullParser) -> Vec<Vec<String>> {
-		let mut parsed_messages = Vec::<Vec<String>>::new();
+	fn buffer_all_messages<R: Read>(parser: &mut PullParser<R>) -> Vec<Vec<String>> {
+		let mut parsed_messages = Vec::new();
 		while let Ok(Some(mut message)) = parser.get_message() {
 			parsed_messages.push(buffer_message(&mut message));
 		}
@@ -485,19 +485,19 @@ mod test {
 		let mut message = parser.get_message().unwrap().unwrap();
 
 		{
-			let mut buffer = Vec::<u8>::new();
+			let mut buffer = Vec::new();
 			message.read_field_to_end(&mut buffer).unwrap().unwrap();
 			assert_eq!(b"0".to_vec(), buffer);
 		}
 
 		{
-			let mut buffer = Vec::<u8>::new();
+			let mut buffer = Vec::new();
 			message.read_field_to_end(&mut buffer).unwrap().unwrap();
 			assert_eq!(b"protocol".to_vec(), buffer);
 		}
 
 		{
-			let mut buffer = Vec::<u8>::new();
+			let mut buffer = Vec::new();
 			let result = message.read_field_to_end(&mut buffer).unwrap();
 			assert!(result.is_none());
 		}
