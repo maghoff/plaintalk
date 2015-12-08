@@ -39,7 +39,7 @@ impl<W: Write> PushGenerator<W> {
 		match self.state {
 			PushGeneratorState::Initial => {
 				self.state = PushGeneratorState::GeneratingMessage;
-				Ok(Message::<'x, W>::new(self))
+				Ok(Message::new(self))
 			},
 			PushGeneratorState::GeneratingMessage => {
 				Err(Error::Unspecified("Finish message before starting a new one"))
@@ -77,7 +77,7 @@ pub struct Message<'a, W: 'a + Write> {
 }
 
 impl<'a, W: Write> Message<'a, W> {
-	fn new<'x, T: 'x + Write>(target: &'x mut PushGenerator<T>) -> Message<'x, T> {
+	fn new(target: &'a mut PushGenerator<W>) -> Message<'a, W> {
 		Message {
 			target: target,
 			state: MessageState::BeforeFirstField,
@@ -88,14 +88,14 @@ impl<'a, W: Write> Message<'a, W> {
 		match self.state {
 			MessageState::BeforeFirstField => {
 				self.state = MessageState::GeneratingField;
-				Ok(Field::<'x, 'a, W>::new(self))
+				Ok(Field::new(self))
 			},
 			MessageState::AfterFirstField => {
 				// TODO Handle failure. Should the generator get into a failed
 				// state? Or are we able to try the same operation again?
 				if let Err(_err) = self.target.target.write_all(b" ") { return Err(Error::Unspecified("Nested error")); }
 				self.state = MessageState::GeneratingField;
-				Ok(Field::<'x, 'a, W>::new(self))
+				Ok(Field::new(self))
 			},
 			MessageState::GeneratingField =>
 				Err(Error::Unspecified("You must close the previous field before starting a new one"))
@@ -132,7 +132,7 @@ pub struct Field<'a, 'b: 'a + 'b, W: 'b + Write> {
 }
 
 impl<'a, 'b, W: Write> Field<'a, 'b, W> {
-	fn new<'x, 'y, T: 'y + Write>(target: &'x mut Message<'y, T>) -> Field<'x, 'y, T> {
+	fn new(target: &'a mut Message<'b, W>) -> Field<'a, 'b, W> {
 		Field {
 			target: target,
 		}
@@ -182,7 +182,7 @@ mod test {
 
 	#[test]
 	fn it_works() {
-		let mut buffer = Vec::<u8>::new();
+		let mut buffer = Vec::new();
 
 		{
 			let mut generator = PushGenerator::new(&mut buffer);
@@ -207,7 +207,7 @@ mod test {
 
 	#[test]
 	fn it_escapes_control_characters() {
-		let mut buffer = Vec::<u8>::new();
+		let mut buffer = Vec::new();
 
 		{
 			let mut generator = PushGenerator::new(&mut buffer);
@@ -230,7 +230,7 @@ mod test {
 
 	#[test]
 	fn it_has_convenience_functions() {
-		let mut buffer = Vec::<u8>::new();
+		let mut buffer = Vec::new();
 
 		{
 			let mut generator = PushGenerator::new(&mut buffer);
