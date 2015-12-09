@@ -5,7 +5,7 @@ repository = "https://github.com/maghoff/plaintalk"
 readme = "README.md"
 documentation = "http://magnushoff.com/rustdoc/plaintalk/plaintalk/"
 keywords = ["network", "protocol"]
-version = "0.0.13"
+version = "0.0.13-1"
 authors = ["Magnus Hoff <maghoff@gmail.com>"]
 license = "MIT"
 
