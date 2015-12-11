@@ -1,7 +1,6 @@
 extern crate num;
 
 use std;
-use std::convert;
 use std::result::Result;
 use std::io::{self, Read, ErrorKind};
 use self::num::traits::{CheckedAdd, CheckedMul};
@@ -14,23 +13,8 @@ const LF: u8 = '\n' as u8;
 const NUM_0: u8 = '0' as u8;
 const NUM_9: u8 = '9' as u8;
 
-#[derive(Debug)]
-pub enum Error {
-	Io(io::Error),
-	Unspecified(&'static str),
-}
-
-impl convert::From<io::Error> for Error {
-	fn from(err: io::Error) -> Error {
-		Error::Io(err)
-	}
-}
-
-impl convert::From<&'static str> for Error {
-	fn from(err: &'static str) -> Error {
-		Error::Unspecified(err)
-	}
-}
+mod error;
+pub use self::error::*;
 
 enum PullParserState {
 	Initial,
