@@ -21,8 +21,8 @@ fn buffer_all_messages<R: Read>(parser: &mut PullParser<R>) -> Vec<Vec<String>> 
 
 #[test]
 fn it_works() {
-	let mut data = Cursor::new(String::from("0 ape katt lol").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"0 ape katt lol" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	let mut message = parser.get_message().unwrap().unwrap();
 
@@ -43,8 +43,8 @@ fn it_works() {
 
 #[test]
 fn it_can_parse_several_messages() {
-	let mut data = Cursor::new(String::from("0 ape katt\n1 tam ape\n2 lol\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"0 ape katt\n1 tam ape\n2 lol\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	assert_eq!(
 		vec![
@@ -59,16 +59,16 @@ fn it_can_parse_several_messages() {
 
 #[test]
 fn it_can_parse_escape_sequences() {
-	let mut data = Cursor::new(String::from("{6}0{1} a{10}pe katt\nlol fie{3}ld 2\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"{6}0{1} a{10}pe katt\nlol fie{3}ld 2\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	assert_eq!(vec!["0{1} ape katt\nlol", "field 2"], buffer_message(&mut parser.get_message().unwrap().unwrap()));
 }
 
 #[test]
 fn it_handles_escape_overflow() {
-	let mut data = Cursor::new(String::from("{9000000000000000000000}blahblah\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"{9000000000000000000000}blahblah\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 	let mut buffer = String::new();
 	let result = parser.get_message().unwrap().unwrap().get_field().unwrap().unwrap().read_to_string(&mut buffer);
 	assert!(result.is_err());
@@ -76,8 +76,8 @@ fn it_handles_escape_overflow() {
 
 #[test]
 fn it_understands_crlf() {
-	let mut data = Cursor::new(String::from("0 ape\r\n1 katt\r\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"0 ape\r\n1 katt\r\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	assert_eq!(
 		vec![
@@ -91,8 +91,8 @@ fn it_understands_crlf() {
 
 #[test]
 fn it_can_ignore_a_field() {
-	let mut data = Cursor::new(String::from("field1 field2\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"field1 field2\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	let mut message = parser.get_message().unwrap().unwrap();
 
@@ -105,8 +105,8 @@ fn it_can_ignore_a_field() {
 
 #[test]
 fn it_can_ignore_a_message() {
-	let mut data = Cursor::new(String::from("msg1 msg1field2\nmsg2 msg2field2\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"msg1 msg1field2\nmsg2 msg2field2\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	let mut buffer = String::new();
 
@@ -129,8 +129,8 @@ fn it_can_ignore_a_message() {
 
 #[test]
 fn message_can_buffer_a_field() {
-	let mut data = Cursor::new(String::from("0 protocol lol\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"0 protocol lol\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	let mut message = parser.get_message().unwrap().unwrap();
 
@@ -149,8 +149,8 @@ fn message_can_buffer_a_field() {
 
 #[test]
 fn message_can_detect_overflow_when_buffering_a_field() {
-	let mut data = Cursor::new(String::from("protocol\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"protocol\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	let mut message = parser.get_message().unwrap().unwrap();
 
@@ -162,8 +162,8 @@ fn message_can_detect_overflow_when_buffering_a_field() {
 
 #[test]
 fn message_can_read_field_to_end() {
-	let mut data = Cursor::new(String::from("0 protocol\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"0 protocol\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	let mut message = parser.get_message().unwrap().unwrap();
 
@@ -188,8 +188,8 @@ fn message_can_read_field_to_end() {
 
 #[test]
 fn message_can_read_field_as_string() {
-	let mut data = Cursor::new(String::from("0 protocol\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"0 protocol\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	let mut message = parser.get_message().unwrap().unwrap();
 
@@ -199,8 +199,8 @@ fn message_can_read_field_as_string() {
 
 #[test]
 fn message_can_read_field_as_slice() {
-	let mut data = Cursor::new(String::from("0 protocol\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"0 protocol\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	let mut message = parser.get_message().unwrap().unwrap();
 	let mut buffer = [0u8;10];
@@ -211,8 +211,8 @@ fn message_can_read_field_as_slice() {
 
 #[test]
 fn message_can_tell_if_it_is_at_the_end() {
-	let mut data = Cursor::new(String::from("0 protocol\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"0 protocol\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	let mut message = parser.get_message().unwrap().unwrap();
 
@@ -225,8 +225,8 @@ fn message_can_tell_if_it_is_at_the_end() {
 
 #[test]
 fn parser_can_read_a_message() {
-	let mut data = Cursor::new(String::from("0 protocol lol\n2 lol\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"0 protocol lol\n2 lol\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	assert_eq!([b"0".to_vec(), b"protocol".to_vec(), b"lol".to_vec()].to_vec(), parser.read_message().unwrap().unwrap());
 	assert_eq!([b"2".to_vec(), b"lol".to_vec()].to_vec(), parser.read_message().unwrap().unwrap());
@@ -234,8 +234,8 @@ fn parser_can_read_a_message() {
 
 #[test]
 fn it_ignores_empty_lines() {
-	let mut data = Cursor::new(String::from("0 protocol lol\n\n{}\n{0}{00}{000}\n2 lol\n").into_bytes());
-	let mut parser = PullParser::new(&mut data);
+	let data = Cursor::new(b"0 protocol lol\n\n{}\n{0}{00}{000}\n2 lol\n" as &[u8]);
+	let mut parser = PullParser::new(data);
 
 	assert_eq!([b"0".to_vec(), b"protocol".to_vec(), b"lol".to_vec()].to_vec(), parser.read_message().unwrap().unwrap());
 	assert_eq!([b"2".to_vec(), b"lol".to_vec()].to_vec(), parser.read_message().unwrap().unwrap());
