@@ -6,13 +6,13 @@ use super::error::*;
 use super::pullparser::*;
 use super::message::*;
 
-const CURLY_L: u8 = '{' as u8;
-const CURLY_R: u8 = '}' as u8;
-const SP: u8 = ' ' as u8;
-const CR: u8 = '\r' as u8;
-const LF: u8 = '\n' as u8;
-const NUM_0: u8 = '0' as u8;
-const NUM_9: u8 = '9' as u8;
+const CURLY_L: u8 = b'{';
+const CURLY_R: u8 = b'}';
+const SP: u8 = b' ';
+const CR: u8 = b'\r';
+const LF: u8 = b'\n';
+const NUM_0: u8 = b'0';
+const NUM_9: u8 = b'9';
 
 enum FieldParserState {
 	Initial,
