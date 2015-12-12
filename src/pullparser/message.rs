@@ -12,20 +12,20 @@ pub enum MessageParserState {
 	Error(&'static str),
 }
 
-pub struct Message<'a, R: 'a + Read> {
-	inner: &'a mut R,
+pub struct Message<'a> {
+	inner: &'a mut Read,
 	parser_state: &'a mut PullParserState,
 	state: MessageParserState,
 	empty: bool,
 }
 
 #[doc(hidden)]
-pub trait MessageInternal<'a, R: 'a + Read> {
-	fn new(inner: &'a mut R, parser_state: &'a mut PullParserState) -> Message<'a, R>;
+pub trait MessageInternal<'a> {
+	fn new(inner: &'a mut Read, parser_state: &'a mut PullParserState) -> Message<'a>;
 }
 
-impl<'a, R: 'a + Read> MessageInternal<'a, R> for Message<'a, R> {
-	fn new(inner: &'a mut R, parser_state: &'a mut PullParserState) -> Message<'a, R> {
+impl<'a> MessageInternal<'a> for Message<'a> {
+	fn new(inner: &'a mut Read, parser_state: &'a mut PullParserState) -> Message<'a> {
 		Message {
 			inner: inner,
 			parser_state: parser_state,
@@ -35,8 +35,8 @@ impl<'a, R: 'a + Read> MessageInternal<'a, R> for Message<'a, R> {
 	}
 }
 
-impl<'a, R: Read> Message<'a, R> {
-	pub fn get_field<'x, 'y: 'x+'y>(&'y mut self) -> Result<Option<Field<'x, 'y, R>>, &'static str> {
+impl<'a> Message<'a> {
+	pub fn get_field<'x, 'y: 'x+'y>(&'y mut self) -> Result<Option<Field<'x, 'y>>, &'static str> {
 		match self.state {
 			MessageParserState::ExpectingField => {
 				self.state = MessageParserState::ReadingField;

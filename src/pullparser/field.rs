@@ -21,8 +21,8 @@ enum FieldParserState {
 	Error(ErrorKind, &'static str)
 }
 
-pub struct Field<'a, 'b: 'a + 'b, R: 'b + Read> {
-	inner: &'b mut R,
+pub struct Field<'a, 'b: 'a + 'b> {
+	inner: &'b mut Read,
 	parser_state: &'b mut PullParserState,
 	message_state: &'a mut MessageParserState,
 	empty: &'a mut bool,
@@ -30,22 +30,22 @@ pub struct Field<'a, 'b: 'a + 'b, R: 'b + Read> {
 }
 
 #[doc(hidden)]
-pub trait FieldInternal<'a, 'b, R: Read> {
+pub trait FieldInternal<'a, 'b> {
 	fn new(
-		inner: &'b mut R,
+		inner: &'b mut Read,
 		parser_state: &'b mut PullParserState,
 		state: &'a mut MessageParserState,
 		empty: &'a mut bool,
-	) -> Field<'a, 'b, R>;
+	) -> Field<'a, 'b>;
 }
 
-impl<'a, 'b, R: Read> FieldInternal<'a, 'b, R> for Field<'a, 'b, R> {
+impl<'a, 'b> FieldInternal<'a, 'b> for Field<'a, 'b> {
 	fn new(
-		inner: &'b mut R,
+		inner: &'b mut Read,
 		parser_state: &'b mut PullParserState,
 		message_state: &'a mut MessageParserState,
 		empty: &'a mut bool,
-	) -> Field<'a, 'b, R> {
+	) -> Field<'a, 'b> {
 		Field {
 			inner: inner,
 			parser_state: parser_state,
@@ -56,7 +56,7 @@ impl<'a, 'b, R: Read> FieldInternal<'a, 'b, R> for Field<'a, 'b, R> {
 	}
 }
 
-impl<'a, 'b, R: Read> Field<'a, 'b, R> {
+impl<'a, 'b> Field<'a, 'b> {
 	pub fn ignore_rest(&mut self) -> Result<(), Error> {
 		let mut buf = [0u8; 256];
 		while try!{self.read(&mut buf)} > 0 {}
@@ -64,7 +64,7 @@ impl<'a, 'b, R: Read> Field<'a, 'b, R> {
 	}
 }
 
-fn parse_escape_header<T:Read>(bytes: &mut io::Bytes<T>) -> Result<usize, (ErrorKind, &'static str)> {
+fn parse_escape_header<T: Read>(bytes: &mut io::Bytes<T>) -> Result<usize, (ErrorKind, &'static str)> {
 	let mut escaped_bytes: usize = 0;
 	loop {
 		match bytes.next() {
@@ -82,7 +82,7 @@ fn parse_escape_header<T:Read>(bytes: &mut io::Bytes<T>) -> Result<usize, (Error
 	}
 }
 
-impl<'a, 'b, R: Read> Read for Field<'a, 'b, R> {
+impl<'a, 'b> Read for Field<'a, 'b> {
 	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
 		let reader = &mut self.inner;
 		let mut cursor:usize = 0;

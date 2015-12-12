@@ -1,7 +1,7 @@
 use std::io::{Read, Cursor};
 use super::*;
 
-fn buffer_message<R: Read>(message: &mut Message<R>) -> Vec<String> {
+fn buffer_message(message: &mut Message) -> Vec<String> {
 	let mut parsed_message = Vec::new();
 	while let Ok(Some(mut field)) = message.get_field() {
 		let mut buffer = String::new();

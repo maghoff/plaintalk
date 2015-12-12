@@ -22,7 +22,7 @@ impl<R: Read> PullParser<R> {
 		}
 	}
 
-	pub fn get_message<'x, 'y: 'x+'y>(&'y mut self) -> Result<Option<Message<'x, R>>, &'static str> {
+	pub fn get_message<'x, 'y: 'x+'y>(&'y mut self) -> Result<Option<Message<'x>>, &'static str> {
 		match self.state {
 			PullParserState::Initial => Ok(Some(Message::new(&mut self.inner, &mut self.state))),
 			PullParserState::Done => Ok(None),
