@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-cargo doc
+cargo doc --no-deps
 
 s3cmd sync \
 	--guess-mime-type \
