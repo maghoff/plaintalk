@@ -129,18 +129,24 @@ impl<'a, W: Write> Drop for Message<'a, W> {
 
 pub struct Field<'a, 'b: 'a + 'b, W: 'b + Write> {
 	inner: &'a mut Message<'b, W>,
+	empty: bool,
 }
 
 impl<'a, 'b, W: Write> Field<'a, 'b, W> {
 	fn new(inner: &'a mut Message<'b, W>) -> Field<'a, 'b, W> {
 		Field {
 			inner: inner,
+			empty: true,
 		}
 	}
 }
 
 impl<'a, 'b, W: Write> Drop for Field<'a, 'b, W> {
 	fn drop(&mut self) {
+		if self.empty {
+			// TODO Handle errors. Should an error put the generator into a failed state?
+			let _ = self.inner.inner.inner.write(b"{0}");
+		}
 		self.inner.state = MessageState::AfterFirstField;
 	}
 }
@@ -167,6 +173,7 @@ impl<'a, 'b, W: Write> Write for Field<'a, 'b, W> {
 			try!{write!(inner_stream, "{{{}}}", buf.len())}
 		}
 		try!{inner_stream.write_all(buf)}
+		self.empty = self.empty && (buf.len() == 0);
 		Ok(buf.len())
 	}
 
@@ -246,5 +253,18 @@ mod test {
 		}
 
 		assert_eq!(String::from("apekatt {10}katter ape\n0 error success\n1\n").into_bytes(), buffer);
+	}
+
+	#[test]
+	fn it_generates_escape_sequence_for_empty_fields() {
+		let mut buffer = Vec::new();
+
+		{
+			let mut generator = PushGenerator::new(&mut buffer);
+
+			generator.write_message(&[b"", b""]).unwrap();
+		}
+
+		assert_eq!(String::from("{0} {0}\n").into_bytes(), buffer);
 	}
 }
