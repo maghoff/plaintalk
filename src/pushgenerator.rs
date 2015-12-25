@@ -209,7 +209,7 @@ mod test {
 			}
 		}
 
-		assert_eq!(String::from("0 lol\n").into_bytes(), buffer);
+		assert_eq!(b"0 lol\n".to_vec(), buffer);
 	}
 
 	#[test]
@@ -232,7 +232,7 @@ mod test {
 			}
 		}
 
-		assert_eq!(String::from("{1} {1}\r{1}\n{1}{\n").into_bytes(), buffer);
+		assert_eq!(b"{1} {1}\r{1}\n{1}{\n".to_vec(), buffer);
 	}
 
 	#[test]
@@ -252,7 +252,7 @@ mod test {
 			generator.write_message(&[b"1"]).unwrap();
 		}
 
-		assert_eq!(String::from("apekatt {10}katter ape\n0 error success\n1\n").into_bytes(), buffer);
+		assert_eq!(b"apekatt {10}katter ape\n0 error success\n1\n".to_vec(), buffer);
 	}
 
 	#[test]
@@ -265,6 +265,6 @@ mod test {
 			generator.write_message(&[b"", b""]).unwrap();
 		}
 
-		assert_eq!(String::from("{0} {0}\n").into_bytes(), buffer);
+		assert_eq!(b"{0} {0}\n".to_vec(), buffer);
 	}
 }
