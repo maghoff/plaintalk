@@ -39,9 +39,3 @@ impl convert::From<io::Error> for Error {
 		Error::Io(err)
 	}
 }
-
-impl convert::From<&'static str> for Error {
-	fn from(err: &'static str) -> Error {
-		Error::Unspecified(err)
-	}
-}

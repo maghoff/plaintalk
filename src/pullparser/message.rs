@@ -36,15 +36,15 @@ impl<'a> MessageInternal<'a> for Message<'a> {
 }
 
 impl<'a> Message<'a> {
-	pub fn get_field<'x, 'y: 'x+'y>(&'y mut self) -> Result<Option<Field<'x, 'y>>, &'static str> {
+	pub fn get_field<'x, 'y: 'x+'y>(&'y mut self) -> Result<Option<Field<'x, 'y>>, Error> {
 		match self.state {
 			MessageParserState::ExpectingField => {
 				self.state = MessageParserState::ReadingField;
 				Ok(Some(Field::new(self.inner, self.parser_state, &mut self.state, &mut self.empty)))
 			},
-			MessageParserState::ReadingField => Err("You need to finish reading the field"),
+			MessageParserState::ReadingField => Err(Error::Unspecified("You need to finish reading the field")),
 			MessageParserState::Done => Ok(None),
-			MessageParserState::Error(err) => Err(err),
+			MessageParserState::Error(err) => Err(Error::Unspecified(err)),
 		}
 	}
 
