@@ -96,7 +96,11 @@ impl<'a, 'b> Read for Field<'a, 'b> {
 						match bytes.next() {
 							Some(Ok(CURLY_L)) => {
 								match parse_escape_header(&mut bytes) {
-									Ok(escaped_bytes) => self.state = FieldParserState::ReadingEscapedBytes(escaped_bytes),
+									Ok(escaped_bytes) => {
+										if escaped_bytes > 0 {
+											self.state = FieldParserState::ReadingEscapedBytes(escaped_bytes);
+										}
+									}
 									Err(err) => {
 										*self.parser_state = PullParserState::Error(err.1);
 										*self.message_state = MessageParserState::Error(err.1);
@@ -152,6 +156,7 @@ impl<'a, 'b> Read for Field<'a, 'b> {
 					}
 				},
 				FieldParserState::ReadingEscapedBytes(size_left) => {
+					debug_assert!(size_left > 0);
 					// TODO It is possible to reach EOF here. It should be considered an
 					// error, and the parser should stop
 					let try_to_read = cmp::min(buf.len()-cursor, size_left);

@@ -233,6 +233,14 @@ fn parser_can_read_a_message() {
 }
 
 #[test]
+fn it_accepts_zero_length_escapes() {
+	let data = Cursor::new(b"{} {0} l{000}ol{0000}\n" as &[u8]);
+	let mut parser = PullParser::new(data);
+
+	assert_eq!([b"".to_vec(), b"".to_vec(), b"lol".to_vec()].to_vec(), parser.read_message().unwrap().unwrap());
+}
+
+#[test]
 fn it_ignores_empty_lines() {
 	let data = Cursor::new(b"0 protocol lol\n\n{}\n{0}{00}{000}\n2 lol\n" as &[u8]);
 	let mut parser = PullParser::new(data);
