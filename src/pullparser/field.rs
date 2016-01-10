@@ -182,3 +182,56 @@ impl<'a, 'b> Read for Field<'a, 'b> {
 		Ok(cursor)
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use std::iter::*;
+	use std::io::{self, Read, Write, BufReader};
+	use std::collections::VecDeque;
+	use super::super::pullparser::*;
+	use super::super::message::*;
+	use super::*;
+
+	struct ReaderMock {
+		replies: VecDeque<io::Result<Vec<u8>>>,
+	}
+
+	impl ReaderMock {
+		fn new<T>(replies: T) -> ReaderMock
+			where T: IntoIterator<Item = io::Result<Vec<u8>>>
+		{
+			ReaderMock {
+				replies: replies.into_iter().collect(),
+			}
+		}
+	}
+
+	impl Read for ReaderMock {
+		fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
+			match self.replies.pop_front() {
+				Some(Ok(data)) => {
+					assert!(buf.len() >= data.len());
+					buf.write(&data).unwrap();
+					Ok(data.len())
+				}
+				Some(Err(err)) => Err(err),
+				None => Ok(0),
+			}
+		}
+	}
+
+	#[test]
+	fn it_can_read_some() {
+		let mut data = BufReader::new(ReaderMock::new(vec![
+			Ok(b"lol".to_vec()),
+			Ok(b"cats".to_vec()),
+		]));
+		let mut parser_state = PullParserState::Initial;
+		let mut message_state = MessageParserState::ReadingField;
+		let mut empty = true;
+		let mut field = Field::new(&mut data, &mut parser_state, &mut message_state, &mut empty);
+		let mut buf = [0u8; 10];
+		assert_eq!(7, field.read(&mut buf).unwrap());
+		assert_eq!(b"lolcats".to_vec(), buf[0..7].to_vec());
+	}
+}
